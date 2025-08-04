@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}ホーム - エモイロ{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="welcome-section">
+        <h2>今日もお疲れ様でした ✨</h2>
+        <p>あなたの感情を記録して、心の変化を美しく振り返りましょう</p>
+        <a href="{{ url_for('record') }}" class="btn btn-primary btn-large">
+            今日の感情を記録する
+        </a>
+    </section>
+
+    <div class="dashboard">
+        <section class="emotion-stats">
+            <h3>今月の感情パレット</h3>
+            {% if emotion_stats %}
+                <div class="emotion-palette">
+                    {% for stat in emotion_stats %}
+                    <div class="palette-item" 
+                         style="background-color: {{ emotions[stat.emotion_type].color }}"
+                         title="{{ emotions[stat.emotion_type].name }}: {{ stat.count }}回">
+                        <span class="palette-emoji">{{ emotions[stat.emotion_type].icon }}</span>
+                        <span class="palette-count">{{ stat.count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-palette">
+                    <p>今月の記録がありません</p>
+                </div>
+            {% endif %}
+        </section>
+
+        <section class="recent-entries">
+            <h3>最近の記録</h3>
+            {% if recent_entries %}
+                <div class="entries-list">
+                    {% for entry in recent_entries %}
+                    <div class="entry-card" style="border-left: 4px solid {{ emotions[entry.emotion_type].color }}">
+                        <div class="entry-header">
+                            <span class="entry-emoji">{{ emotions[entry.emotion_type].icon }}</span>
+                            <span class="entry-emotion">{{ emotions[entry.emotion_type].name }}</span>
+                            <span class="entry-date">{{ entry.date }}</span>
+                        </div>
+                        {% if entry.note %}
+                        <p class="entry-note">{{ entry.note }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <p>まだ記録がありません</p>
+                    <a href="{{ url_for('record') }}" class="btn btn-secondary">最初の記録をつけましょう</a>
+                </div>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add fade-in animation to cards
+    const cards = document.querySelectorAll('.entry-card');
+    cards.forEach((card, index) => {
+        card.style.animationDelay = `${index * 0.1}s`;
+        card.classList.add('fade-in');
+    });
+
+    // Add hover effects to palette items
+    const paletteItems = document.querySelectorAll('.palette-item');
+    paletteItems.forEach(item => {
+        item.addEventListener('mouseenter', function() {
+            this.style.transform = 'scale(1.1)';
+        });
+        item.addEventListener('mouseleave', function() {
+            this.style.transform = 'scale(1)';
+        });
+    });
+});
+</script>
+{% endblock %}

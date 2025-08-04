@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}履歴 - エモイロ{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="history-header">
+        <h2>あなたの感情の軌跡</h2>
+        <p>過去の記録を振り返って、心の変化を見つめてみましょう</p>
+    </section>
+
+    <div class="history-tabs">
+        <button class="tab-btn active" data-tab="calendar">カレンダー</button>
+        <button class="tab-btn" data-tab="timeline">タイムライン</button>
+        <button class="tab-btn" data-tab="analytics">分析</button>
+    </div>
+
+    <!-- Calendar View -->
+    <section id="calendar-tab" class="tab-content active">
+        <div class="calendar-container">
+            <div class="calendar-header">
+                <button id="prev-month" class="btn btn-icon">&lt;</button>
+                <h3 id="current-month"></h3>
+                <button id="next-month" class="btn btn-icon">&gt;</button>
+            </div>
+            <div id="calendar-grid" class="calendar-grid"></div>
+        </div>
+        <div class="calendar-legend">
+            <h4>感情の色</h4>
+            <div class="legend-items">
+                {% for key, emotion in emotions.items() %}
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: {{ emotion.color }}"></div>
+                    <span>{{ emotion.icon }} {{ emotion.name }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <!-- Timeline View -->
+    <section id="timeline-tab" class="tab-content">
+        <div class="timeline">
+            {% for entry in entries %}
+            <div class="timeline-item" style="border-left-color: {{ emotions[entry.emotion_type].color }}">
+                <div class="timeline-date">{{ entry.date }}</div>
+                <div class="timeline-content">
+                    <div class="timeline-emotion">
+                        <span class="timeline-emoji">{{ emotions[entry.emotion_type].icon }}</span>
+                        <span class="timeline-emotion-name">{{ emotions[entry.emotion_type].name }}</span>
+                    </div>
+                    {% if entry.note %}
+                    <p class="timeline-note">{{ entry.note }}</p>
+                    {% endif %}
+                    <div class="timeline-actions">
+                        <a href="{{ url_for('record') }}?date={{ entry.date }}" class="btn btn-small btn-secondary">編集</a>
+                        <a href="{{ url_for('delete_entry', date=entry.date) }}" 
+                           class="btn btn-small btn-danger"
+                           onclick="return confirm('この記録を削除しますか？')">削除</a>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-timeline">
+                <p>まだ記録がありません</p>
+                <a href="{{ url_for('record') }}" class="btn btn-primary">最初の記録をつけましょう</a>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Analytics View -->
+    <section id="analytics-tab" class="tab-content">
+        <div class="analytics-grid">
+            <div class="chart-container">
+                <h3>月別感情分布</h3>
+                <canvas id="monthly-chart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>感情の推移</h3>
+                <canvas id="trend-chart"></canvas>
+            </div>
+        </div>
+        
+        <div class="stats-summary">
+            <h3>統計サマリー</h3>
+            <div class="stats-cards">
+                <div class="stats-card">
+                    <div class="stats-number">{{ entries|length }}</div>
+                    <div class="stats-label">総記録数</div>
+                </div>
+                <div class="stats-card">
+                    <div class="stats-number" id="most-frequent-emotion">-</div>
+                    <div class="stats-label">最も多い感情</div>
+                </div>
+                <div class="stats-card">
+                    <div class="stats-number" id="streak-days">-</div>
+                    <div class="stats-label">連続記録日数</div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Emotion data for JavaScript
+const emotions = {{ emotions|tojson }};
+const monthlyStats = {{ monthly_stats|tojson }};
+const entries = {{ entries|tojson }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Tab switching
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabId = this.dataset.tab;
+            
+            // Update active states
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            
+            this.classList.add('active');
+            document.getElementById(tabId + '-tab').classList.add('active');
+            
+            // Initialize charts when analytics tab is opened
+            if (tabId === 'analytics') {
+                initCharts();
+            }
+        });
+    });
+    
+    // Initialize calendar
+    initCalendar();
+    
+    // Calculate and display stats
+    calculateStats();
+});
+
+function initCalendar() {
+    const calendarGrid = document.getElementById('calendar-grid');
+    const currentMonth = document.getElementById('current-month');
+    const prevBtn = document.getElementById('prev-month');
+    const nextBtn = document.getElementById('next-month');
+    
+    let currentDate = new Date();
+    
+    function renderCalendar() {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        
+        // Update header
+        currentMonth.textContent = `${year}年${month + 1}月`;
+        
+        // Clear calendar
+        calendarGrid.innerHTML = '';
+        
+        // Get first day of month and number of days
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startDayOfWeek = firstDay.getDay();
+        
+        // Add day headers
+        const dayHeaders = ['日', '月', '火', '水', '木', '金', '土'];
+        dayHeaders.forEach(day => {
+            const header = document.createElement('div');
+            header.className = 'calendar-day-header';
+            header.textContent = day;
+            calendarGrid.appendChild(header);
+        });
+        
+        // Add empty cells for days before month starts
+        for (let i = 0; i < startDayOfWeek; i++) {
+            const emptyDay = document.createElement('div');
+            emptyDay.className = 'calendar-day empty';
+            calendarGrid.appendChild(emptyDay);
+        }
+        
+        // Add days of month
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dayElement = document.createElement('div');
+            dayElement.className = 'calendar-day';
+            dayElement.textContent = day;
+            
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            
+            // Check if there's an entry for this date
+            const entry = entries.find(e => e.date === dateStr);
+            if (entry) {
+                dayElement.style.backgroundColor = emotions[entry.emotion_type].color + '40';
+                dayElement.style.borderColor = emotions[entry.emotion_type].color;
+                dayElement.classList.add('has-entry');
+                dayElement.title = `${emotions[entry.emotion_type].name}: ${entry.note || ''}`;
+            }
+            
+            calendarGrid.appendChild(dayElement);
+        }
+    }
+    
+    prevBtn.addEventListener('click', function() {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderCalendar();
+    });
+    
+    nextBtn.addEventListener('click', function() {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderCalendar();
+    });
+    
+    renderCalendar();
+}
+
+function initCharts() {
+    // Monthly emotion distribution chart
+    const monthlyCtx = document.getElementById('monthly-chart').getContext('2d');
+    const monthlyData = prepareMonthlyChartData();
+    
+    new Chart(monthlyCtx, {
+        type: 'doughnut',
+        data: monthlyData,
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+    
+    // Trend chart
+    const trendCtx = document.getElementById('trend-chart').getContext('2d');
+    const trendData = prepareTrendChartData();
+    
+    new Chart(trendCtx, {
+        type: 'line',
+        data: trendData,
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+function prepareMonthlyChartData() {
+    const emotionCounts = {};
+    entries.forEach(entry => {
+        emotionCounts[entry.emotion_type] = (emotionCounts[entry.emotion_type] || 0) + 1;
+    });
+    
+    const labels = [];
+    const data = [];
+    const colors = [];
+    
+    Object.entries(emotionCounts).forEach(([emotionType, count]) => {
+        labels.push(emotions[emotionType].name);
+        data.push(count);
+        colors.push(emotions[emotionType].color);
+    });
+    
+    return {
+        labels: labels,
+        datasets: [{
+            data: data,
+            backgroundColor: colors,
+            borderWidth: 2,
+            borderColor: '#fff'
+        }]
+    };
+}
+
+function prepareTrendChartData() {
+    const last30Days = [];
+    const today = new Date();
+    
+    for (let i = 29; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        const entry = entries.find(e => e.date === dateStr);
+        last30Days.push({
+            date: dateStr,
+            hasEntry: !!entry
+        });
+    }
+    
+    return {
+        labels: last30Days.map(d => d.date.split('-')[2]),
+        datasets: [{
+            label: '記録あり',
+            data: last30Days.map(d => d.hasEntry ? 1 : 0),
+            borderColor: '#4A90E2',
+            backgroundColor: '#4A90E240',
+            tension: 0.4,
+            fill: true
+        }]
+    };
+}
+
+function calculateStats() {
+    // Most frequent emotion
+    const emotionCounts = {};
+    entries.forEach(entry => {
+        emotionCounts[entry.emotion_type] = (emotionCounts[entry.emotion_type] || 0) + 1;
+    });
+    
+    let mostFrequentEmotion = '-';
+    let maxCount = 0;
+    Object.entries(emotionCounts).forEach(([emotionType, count]) => {
+        if (count > maxCount) {
+            maxCount = count;
+            mostFrequentEmotion = emotions[emotionType].name;
+        }
+    });
+    
+    document.getElementById('most-frequent-emotion').textContent = mostFrequentEmotion;
+    
+    // Streak calculation
+    let streak = 0;
+    const today = new Date();
+    let checkDate = new Date(today);
+    
+    while (true) {
+        const dateStr = checkDate.toISOString().split('T')[0];
+        const hasEntry = entries.some(e => e.date === dateStr);
+        
+        if (hasEntry) {
+            streak++;
+            checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+            break;
+        }
+    }
+    
+    document.getElementById('streak-days').textContent = streak;
+}
+</script>
+{% endblock %}

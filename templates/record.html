@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}感情を記録 - エモイロ{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="record-section">
+        <h2>今日の感情を記録しましょう</h2>
+        <p>あなたの心の色を選んでください</p>
+
+        <form method="POST" class="record-form">
+            <div class="form-group">
+                <label for="date">日付</label>
+                <input type="date" id="date" name="date" value="{{ today }}" max="{{ today }}" required>
+            </div>
+
+            <div class="form-group">
+                <label>感情を選択してください</label>
+                <div class="emotion-grid">
+                    {% for key, emotion in emotions.items() %}
+                    <div class="emotion-option">
+                        <input type="radio" 
+                               id="emotion_{{ key }}" 
+                               name="emotion_type" 
+                               value="{{ key }}"
+                               {% if existing_entry and existing_entry.emotion_type == key %}checked{% endif %}
+                               required>
+                        <label for="emotion_{{ key }}" 
+                               class="emotion-label"
+                               style="background-color: {{ emotion.color }}20; border: 2px solid {{ emotion.color }}">
+                            <span class="emotion-emoji">{{ emotion.icon }}</span>
+                            <span class="emotion-name">{{ emotion.name }}</span>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="note">メモ（任意）</label>
+                <textarea id="note" 
+                         name="note" 
+                         placeholder="今日の出来事や感じたことを自由に書いてください..."
+                         rows="4">{% if existing_entry %}{{ existing_entry.note }}{% endif %}</textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-large">
+                    {% if existing_entry %}記録を更新する{% else %}記録する{% endif %}
+                </button>
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">キャンセル</a>
+            </div>
+        </form>
+    </section>
+
+    <section class="motivation-section">
+        <div class="motivation-card">
+            <h3>💡 記録のコツ</h3>
+            <ul>
+                <li>その瞬間の気持ちを素直に記録しましょう</li>
+                <li>小さな感情の変化も大切です</li>
+                <li>メモには具体的な出来事を書くと振り返りに役立ちます</li>
+            </ul>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const emotionOptions = document.querySelectorAll('.emotion-option');
+    const form = document.querySelector('.record-form');
+    
+    // Add interactive effects to emotion selection
+    emotionOptions.forEach(option => {
+        const input = option.querySelector('input[type="radio"]');
+        const label = option.querySelector('.emotion-label');
+        
+        // Update visual state based on selection
+        function updateSelection() {
+            emotionOptions.forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            if (input.checked) {
+                option.classList.add('selected');
+            }
+        }
+        
+        input.addEventListener('change', updateSelection);
+        
+        // Add hover effects
+        label.addEventListener('mouseenter', function() {
+            if (!input.checked) {
+                this.style.transform = 'scale(1.05)';
+            }
+        });
+        
+        label.addEventListener('mouseleave', function() {
+            if (!input.checked) {
+                this.style.transform = 'scale(1)';
+            }
+        });
+        
+        // Initialize state
+        updateSelection();
+    });
+    
+    // Form submission animation and clear memo field
+    form.addEventListener('submit', function(e) {
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.innerHTML = '記録中... ✨';
+        submitBtn.disabled = true;
+        
+        // Clear memo field after successful submission
+        // Add a small delay to ensure form submission is processed
+        setTimeout(() => {
+            const noteField = document.querySelector('#note');
+            if (noteField) {
+                noteField.value = '';
+                noteField.style.height = 'auto';
+            }
+        }, 100);
+    });
+    
+    // Auto-resize textarea
+    const textarea = document.querySelector('#note');
+    textarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = this.scrollHeight + 'px';
+    });
+});
+</script>
+{% endblock %}
